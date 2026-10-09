@@ -3,6 +3,7 @@ package com.springup.service.impl;
 import com.springup.domain.dto.AlarmRequestDto;
 import com.springup.domain.dto.AlarmResponseDto;
 import com.springup.domain.model.Alarm;
+import com.springup.domain.model.MissionConfig;
 import com.springup.exception.ResourceNotFoundException;
 import com.springup.repository.AlarmRepository;
 import com.springup.service.AlarmService;
@@ -10,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -38,15 +40,27 @@ public class AlarmServiceImpl implements AlarmService {
     @Override
     @Transactional
     public AlarmResponseDto createAlarm(AlarmRequestDto dto) {
+        List<MissionConfig> missions = new ArrayList<>();
+        if (dto.missions() != null) {
+            for (var mDto : dto.missions()) {
+                missions.add(MissionConfig.builder()
+                        .stepOrder(mDto.stepOrder())
+                        .minigame(mDto.minigame())
+                        .difficulty(mDto.difficulty())
+                        .requiredCompletions(mDto.requiredCompletions())
+                        .targetBarcodeHash(mDto.targetBarcodeHash())
+                        .build());
+            }
+        }
+
         Alarm alarm = Alarm.builder()
                 .title(dto.title())
                 .alarmTime(dto.alarmTime())
                 .isEnabled(dto.isEnabled())
                 .repeatDaysMask(dto.repeatDaysMask())
-                .minigame(dto.minigame())
-                .minigameDifficulty(dto.minigameDifficulty())
-                .requiredCompletions(dto.requiredCompletions())
-                .targetBarcodeHash(dto.targetBarcodeHash())
+                .wakeUpCheckEnabled(dto.wakeUpCheckEnabled())
+                .wakeUpCheckDelayMinutes(dto.wakeUpCheckDelayMinutes())
+                .missions(missions)
                 .vibrate(dto.vibrate())
                 .volumeLevel(dto.volumeLevel())
                 .build();
@@ -65,12 +79,23 @@ public class AlarmServiceImpl implements AlarmService {
         alarm.setAlarmTime(dto.alarmTime());
         alarm.setEnabled(dto.isEnabled());
         alarm.setRepeatDaysMask(dto.repeatDaysMask());
-        alarm.setMinigame(dto.minigame());
-        alarm.setMinigameDifficulty(dto.minigameDifficulty());
-        alarm.setRequiredCompletions(dto.requiredCompletions());
-        alarm.setTargetBarcodeHash(dto.targetBarcodeHash());
+        alarm.setWakeUpCheckEnabled(dto.wakeUpCheckEnabled());
+        alarm.setWakeUpCheckDelayMinutes(dto.wakeUpCheckDelayMinutes());
         alarm.setVibrate(dto.vibrate());
         alarm.setVolumeLevel(dto.volumeLevel());
+
+        alarm.getMissions().clear();
+        if (dto.missions() != null) {
+            for (var mDto : dto.missions()) {
+                alarm.getMissions().add(MissionConfig.builder()
+                        .stepOrder(mDto.stepOrder())
+                        .minigame(mDto.minigame())
+                        .difficulty(mDto.difficulty())
+                        .requiredCompletions(mDto.requiredCompletions())
+                        .targetBarcodeHash(mDto.targetBarcodeHash())
+                        .build());
+            }
+        }
 
         return AlarmResponseDto.fromEntity(alarm);
     }

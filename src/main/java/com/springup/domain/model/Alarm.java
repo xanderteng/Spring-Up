@@ -1,6 +1,5 @@
 package com.springup.domain.model;
 
-import com.springup.domain.enums.MinigameType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
@@ -8,6 +7,8 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "alarms")
@@ -16,8 +17,8 @@ import java.time.OffsetDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-
 public class Alarm {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -34,26 +35,26 @@ public class Alarm {
     @Builder.Default
     private boolean isEnabled = true;
 
-    // Bitmask for days: Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64
+    // Bitmask for days: Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64 (31 = Weekdays)
     @Column(nullable = false)
     @Builder.Default
-    private int repeatDaysMask = 31; // Default: Weekdays
+    private int repeatDaysMask = 31;
 
-    @Enumerated(EnumType.STRING)
+    // --- Wake Up Check Watchdog Settings ---
     @Column(nullable = false)
     @Builder.Default
-    private MinigameType minigame = MinigameType.MATH;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private int minigameDifficulty = 1; // 1 = Easy, 2 = Medium, 3 = Hard
+    private boolean wakeUpCheckEnabled = true;
 
     @Column(nullable = false)
     @Builder.Default
-    private int requiredCompletions = 3; // e.g., 3 equations, 40 shakes, 3 grid patterns
+    private int wakeUpCheckDelayMinutes = 5;
 
-    @Column(length = 255)
-    private String targetBarcodeHash;
+    // --- Ordered Mission Chain ---
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "alarm_missions", joinColumns = @JoinColumn(name = "alarm_id"))
+    @OrderBy("stepOrder ASC")
+    @Builder.Default
+    private List<MissionConfig> missions = new ArrayList<>();
 
     @Builder.Default
     private boolean vibrate = true;

@@ -3,6 +3,7 @@ package com.springup.web.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springup.domain.dto.AlarmRequestDto;
 import com.springup.domain.dto.AlarmResponseDto;
+import com.springup.domain.dto.MissionConfigDto;
 import com.springup.domain.enums.MinigameType;
 import com.springup.service.AlarmService;
 import org.junit.jupiter.api.DisplayName;
@@ -14,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalTime;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -34,30 +36,34 @@ class AlarmControllerTest {
     private AlarmService alarmService;
 
     @Test
-    @DisplayName("POST /api/v1/alarms should return 201 Created when valid payload provided")
+    @DisplayName("POST /api/v1/alarms returns 201 when valid payload with missions is provided")
     void createAlarm_ValidPayload_Returns201() throws Exception {
+        List<MissionConfigDto> missions = List.of(
+                new MissionConfigDto(1, MinigameType.MATH, 2, 3, null),
+                new MissionConfigDto(2, MinigameType.POWER_SHAKE, 1, 30, null)
+        );
+
         AlarmRequestDto request = new AlarmRequestDto(
-                "Morning Raid",
+                "Morning Gauntlet",
                 LocalTime.of(6, 30),
                 true,
-                31, // Weekdays mask
-                MinigameType.MATH,
-                2,
-                3,
-                null,
+                31,
+                true,
+                5,
+                missions,
                 true,
                 90
         );
 
         AlarmResponseDto response = new AlarmResponseDto(
                 1L,
-                "Morning Raid",
+                "Morning Gauntlet",
                 LocalTime.of(6, 30),
                 true,
                 31,
-                MinigameType.MATH,
-                2,
-                3,
+                true,
+                5,
+                missions,
                 true,
                 90
         );
@@ -69,22 +75,23 @@ class AlarmControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(1L))
-                .andExpect(jsonPath("$.title").value("Morning Raid"))
-                .andExpect(jsonPath("$.minigame").value("MATH"));
+                .andExpect(jsonPath("$.title").value("Morning Gauntlet"))
+                .andExpect(jsonPath("$.wakeUpCheckEnabled").value(true))
+                .andExpect(jsonPath("$.wakeUpCheckDelayMinutes").value(5))
+                .andExpect(jsonPath("$.missions.length()").value(2));
     }
 
     @Test
-    @DisplayName("POST /api/v1/alarms should return 400 Bad Request when title is blank")
-    void createAlarm_InvalidTitle_Returns400() throws Exception {
+    @DisplayName("POST /api/v1/alarms returns 400 when missions list is empty")
+    void createAlarm_EmptyMissions_Returns400() throws Exception {
         AlarmRequestDto invalidRequest = new AlarmRequestDto(
-                "", // Blank title violates @NotBlank
+                "No Mission Alarm",
                 LocalTime.of(6, 30),
                 true,
                 31,
-                MinigameType.MATH,
-                2,
-                3,
-                null,
+                true,
+                5,
+                List.of(), // Violates @NotEmpty
                 true,
                 90
         );
@@ -94,6 +101,6 @@ class AlarmControllerTest {
                         .content(objectMapper.writeValueAsString(invalidRequest)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Validation Error"))
-                .andExpect(jsonPath("$.invalidFields.title").exists());
+                .andExpect(jsonPath("$.invalidFields.missions").exists());
     }
 }

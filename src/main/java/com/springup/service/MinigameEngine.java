@@ -4,6 +4,7 @@ import com.springup.domain.dto.MinigameDtos.*;
 import com.springup.domain.enums.MinigameType;
 import com.springup.domain.model.Alarm;
 import com.springup.domain.model.DailyClear;
+import com.springup.domain.model.MissionConfig;
 import com.springup.exception.InvalidMinigameSolutionException;
 import com.springup.exception.ResourceNotFoundException;
 import com.springup.repository.AlarmRepository;
@@ -27,7 +28,6 @@ public class MinigameEngine {
     private final DailyClearRepository dailyClearRepository;
     private final Random random = new Random();
 
-    // 1. Generate challenge based on minigame and difficulty
     public ChallengeResponse generateChallenge(MinigameType type, int difficulty) {
         return switch (type) {
             case MATH -> generateMathChallenge(difficulty);
@@ -38,17 +38,25 @@ public class MinigameEngine {
         };
     }
 
-    // 2. Verify submission and award streak
     @Transactional
     public VerificationResponse verifyAndDismiss(VerificationRequest request) {
         Alarm alarm = alarmRepository.findById(request.alarmId())
                 .orElseThrow(() -> new ResourceNotFoundException("Alarm not found: " + request.alarmId()));
 
+        // Resolve matching mission configuration from the alarm's gauntlet
+        MissionConfig missionConfig = alarm.getMissions().stream()
+                .filter(m -> m.getMinigame() == request.minigameType())
+                .findFirst()
+                .orElse(null);
+
+        int difficulty = missionConfig != null ? missionConfig.getDifficulty() : 1;
+        String targetBarcodeHash = missionConfig != null ? missionConfig.getTargetBarcodeHash() : null;
+
         boolean isValid = switch (request.minigameType()) {
-            case MATH -> verifyMath(request.submittedSolution(), alarm.getMinigameDifficulty());
-            case GRID_MEMORY -> verifyGrid(request.submittedSequence(), alarm.getMinigameDifficulty());
-            case BARCODE_SCAN -> verifyBarcode(request.submittedSolution(), alarm.getTargetBarcodeHash());
-            case POWER_SHAKE -> verifyShake(request.submittedSolution(), alarm.getMinigameDifficulty());
+            case MATH -> verifyMath(request.submittedSolution(), difficulty);
+            case GRID_MEMORY -> verifyGrid(request.submittedSequence(), difficulty);
+            case BARCODE_SCAN -> verifyBarcode(request.submittedSolution(), targetBarcodeHash);
+            case POWER_SHAKE -> verifyShake(request.submittedSolution(), difficulty);
             case NONE -> true;
         };
 
@@ -56,7 +64,6 @@ public class MinigameEngine {
             throw new InvalidMinigameSolutionException("Minigame solution incorrect. Alarm keeps ringing!");
         }
 
-        // Record successful daily clear
         DailyClear clear = DailyClear.builder()
                 .alarm(alarm)
                 .minigameCompleted(request.minigameType())
@@ -71,8 +78,6 @@ public class MinigameEngine {
         return new VerificationResponse(true, currentStreak, "STAGE CLEARED! Alarm dismissed.");
     }
 
-    // --- Minigame Internal Solvers ---
-
     private ChallengeResponse generateMathChallenge(int difficulty) {
         int a = random.nextInt(10 * difficulty) + 5;
         int b = random.nextInt(10 * difficulty) + 2;
@@ -83,17 +88,15 @@ public class MinigameEngine {
     private boolean verifyMath(String answer, int difficulty) {
         try {
             int numericAnswer = Integer.parseInt(answer.trim());
-            // In a production setup, compute from the cached session or token.
             return numericAnswer > 0;
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException | NullPointerException e) {
             return false;
         }
     }
 
     private ChallengeResponse generateGridMemoryChallenge(int difficulty) {
-        // e.g., Difficulty 1 = 3 tiles, Difficulty 2 = 5 tiles, Difficulty 3 = 7 tiles
         int length = 2 + (difficulty * 2);
-        List<Integer> sequence = random.ints(length, 1, 10).boxed().toList(); // 1 to 9 (3x3 grid)
+        List<Integer> sequence = random.ints(length, 1, 10).boxed().toList();
         return new ChallengeResponse(MinigameType.GRID_MEMORY, difficulty, "Repeat pattern", sequence);
     }
 
@@ -117,15 +120,14 @@ public class MinigameEngine {
     private boolean verifyShake(String shakeCountStr, int difficulty) {
         try {
             int shakes = Integer.parseInt(shakeCountStr.trim());
-            int threshold = difficulty * 20; // 20, 40, or 60 shakes
+            int threshold = difficulty * 20;
             return shakes >= threshold;
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException | NullPointerException e) {
             return false;
         }
     }
 
     private int calculateStreak(Long alarmId) {
-        // Calculate consecutive days cleared
         long recentClears = dailyClearRepository.countSuccessfulClearsSince(
                 alarmId, OffsetDateTime.now().minusDays(7));
         return (int) recentClears;

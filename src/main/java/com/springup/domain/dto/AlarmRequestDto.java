@@ -1,8 +1,10 @@
 package com.springup.domain.dto;
 
-import com.springup.domain.enums.MinigameType;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
+
 import java.time.LocalTime;
+import java.util.List;
 
 public record AlarmRequestDto(
     @NotBlank(message = "Title is required")
@@ -16,16 +18,14 @@ public record AlarmRequestDto(
     @Min(0) @Max(127)
     int repeatDaysMask,
 
-    @NotNull(message = "Minigame type is required")
-    MinigameType minigame,
+    boolean wakeUpCheckEnabled,
 
-    @Min(1) @Max(3)
-    int minigameDifficulty,
+    @Min(1) @Max(60)
+    int wakeUpCheckDelayMinutes,
 
-    @Min(1) @Max(100)
-    int requiredCompletions,
+    @NotEmpty(message = "At least one mission must be configured")
+    List<@Valid MissionConfigDto> missions,
 
-    String targetBarcodeHash,
     boolean vibrate,
 
     @Min(0) @Max(100)

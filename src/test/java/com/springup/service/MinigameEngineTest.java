@@ -3,6 +3,7 @@ package com.springup.service;
 import com.springup.domain.dto.MinigameDtos.*;
 import com.springup.domain.enums.MinigameType;
 import com.springup.domain.model.Alarm;
+import com.springup.domain.model.MissionConfig;
 import com.springup.exception.InvalidMinigameSolutionException;
 import com.springup.repository.AlarmRepository;
 import com.springup.repository.DailyClearRepository;
@@ -41,45 +42,57 @@ class MinigameEngineTest {
 
     @BeforeEach
     void setUp() throws NoSuchAlgorithmException {
-        // Pre-compute a known SHA-256 hash for barcode testing (Input: "123456789")
         byte[] hash = MessageDigest.getInstance("SHA-256").digest("123456789".getBytes());
         String barcodeHash = HexFormat.of().formatHex(hash);
 
+        List<MissionConfig> missions = List.of(
+                MissionConfig.builder()
+                        .stepOrder(1)
+                        .minigame(MinigameType.MATH)
+                        .difficulty(2)
+                        .requiredCompletions(3)
+                        .build(),
+                MissionConfig.builder()
+                        .stepOrder(2)
+                        .minigame(MinigameType.BARCODE_SCAN)
+                        .difficulty(1)
+                        .requiredCompletions(1)
+                        .targetBarcodeHash(barcodeHash)
+                        .build()
+        );
+
         sampleAlarm = Alarm.builder()
                 .id(1L)
-                .title("Test Alarm")
+                .title("Multi-Stage Test Alarm")
                 .alarmTime(LocalTime.of(7, 0))
-                .minigame(MinigameType.MATH)
-                .minigameDifficulty(2)
-                .targetBarcodeHash(barcodeHash)
+                .wakeUpCheckEnabled(true)
+                .wakeUpCheckDelayMinutes(5)
+                .missions(missions)
                 .build();
     }
 
     @Test
     @DisplayName("Challenge generator produces valid 3x3 Grid Memory sequence")
     void generateChallenge_GridMemory_ReturnsCorrectSequenceLength() {
-        // Difficulty 2 should yield: 2 + (2 * 2) = 6 tiles
         ChallengeResponse challenge = minigameEngine.generateChallenge(MinigameType.GRID_MEMORY, 2);
 
         assertNotNull(challenge);
         assertEquals(MinigameType.GRID_MEMORY, challenge.type());
         assertNotNull(challenge.memorySequence());
         assertEquals(6, challenge.memorySequence().size());
-        
-        // Assert all grid numbers are within 1 to 9 (3x3 grid)
         assertTrue(challenge.memorySequence().stream().allMatch(n -> n >= 1 && n <= 9));
     }
 
     @Test
-    @DisplayName("Barcode verification succeeds when submitted barcode matches target SHA-256 hash")
+    @DisplayName("Barcode verification succeeds when submitted barcode matches target SHA-256 hash in mission")
     void verifyAndDismiss_BarcodeScan_SucceedsOnMatchingHash() {
         when(alarmRepository.findById(1L)).thenReturn(Optional.of(sampleAlarm));
-        when(dailyClearRepository.countSuccessfulClearsSince(eq(1L), any())).thenReturn(3L);
+        when(dailyClearRepository.countSuccessfulClearsSince(eq(1L), any())).thenReturn(4L);
 
         VerificationRequest request = new VerificationRequest(
                 1L,
                 MinigameType.BARCODE_SCAN,
-                "123456789", // Matches the pre-computed hash
+                "123456789",
                 null,
                 15,
                 0
@@ -88,7 +101,7 @@ class MinigameEngineTest {
         VerificationResponse response = minigameEngine.verifyAndDismiss(request);
 
         assertTrue(response.isDismissed());
-        assertEquals(3, response.currentStreak());
+        assertEquals(4, response.currentStreak());
         verify(dailyClearRepository, times(1)).save(any());
     }
 
@@ -110,7 +123,6 @@ class MinigameEngineTest {
             minigameEngine.verifyAndDismiss(request);
         });
 
-        // Ensure no daily clear is recorded in the database when mission fails
         verify(dailyClearRepository, never()).save(any());
     }
 }
