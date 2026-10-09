@@ -1,0 +1,352 @@
+openapi: 3.0.3
+info:
+  title: Spring Up - Gamified Alarm & Telemetry Engine
+  description: >
+    Enterprise REST API contract for Spring Up. Coordinates alarm scheduling, 
+    daily wake-up streaks, and minigame challenge generation & verification 
+    (Math, Grid Memory, Barcode Scan, Power Shake).
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local Development Server
+
+paths:
+  /api/v1/alarms:
+    get:
+      summary: Retrieve all alarms
+      description: Returns a list of all configured alarms.
+      operationId: getAllAlarms
+      responses:
+        '200':
+          description: List of alarms retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AlarmResponseDto'
+    post:
+      summary: Create a new alarm
+      description: Registers an alarm with specified minigame, schedule bitmask, and parameters.
+      operationId: createAlarm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlarmRequestDto'
+      responses:
+        '201':
+          description: Alarm successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlarmResponseDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/v1/alarms/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    get:
+      summary: Get alarm by ID
+      operationId: getAlarmById
+      responses:
+        '200':
+          description: Alarm found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlarmResponseDto'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    put:
+      summary: Update existing alarm
+      operationId: updateAlarm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlarmRequestDto'
+      responses:
+        '200':
+          description: Alarm updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlarmResponseDto'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+    delete:
+      summary: Delete an alarm
+      operationId: deleteAlarm
+      responses:
+        '204':
+          description: Alarm deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /api/v1/alarms/{id}/toggle:
+    patch:
+      summary: Toggle alarm enabled state
+      operationId: toggleAlarm
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: enabled
+          in: query
+          required: true
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Alarm state toggled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlarmResponseDto'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /api/v1/minigames/challenge:
+    get:
+      summary: Fetch dynamic challenge for an alarm
+      description: Dispatches math equation, grid sequence, or threshold parameters.
+      operationId: getChallenge
+      parameters:
+        - name: type
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/MinigameType'
+        - name: difficulty
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: Challenge generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeResponse'
+
+  /api/v1/minigames/verify:
+    post:
+      summary: Verify minigame solution and dismiss alarm
+      description: Submits user solution; records daily clear telemetry and calculates current streak.
+      operationId: verifySolution
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerificationRequest'
+      responses:
+        '200':
+          description: Solution verified, alarm dismissed, streak awarded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationResponse'
+        '422':
+          description: Solution incorrect, alarm continues ringing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+components:
+  schemas:
+    MinigameType:
+      type: string
+      enum: [NONE, MATH, POWER_SHAKE, BARCODE_SCAN, GRID_MEMORY]
+
+    AlarmRequestDto:
+      type: object
+      required:
+        - title
+        - alarmTime
+        - minigame
+      properties:
+        title:
+          type: string
+          example: "Morning Boss Raid"
+        alarmTime:
+          type: string
+          pattern: '^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$'
+          example: "06:30:00"
+        isEnabled:
+          type: boolean
+          default: true
+        repeatDaysMask:
+          type: integer
+          minimum: 0
+          maximum: 127
+          description: "Bitmask: Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64 (31 = Weekdays)"
+          example: 31
+        minigame:
+          $ref: '#/components/schemas/MinigameType'
+        minigameDifficulty:
+          type: integer
+          minimum: 1
+          maximum: 3
+          example: 2
+        requiredCompletions:
+          type: integer
+          minimum: 1
+          maximum: 100
+          example: 3
+        targetBarcodeHash:
+          type: string
+          nullable: true
+          example: "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3"
+        vibrate:
+          type: boolean
+          default: true
+        volumeLevel:
+          type: integer
+          minimum: 0
+          maximum: 100
+          default: 100
+
+    AlarmResponseDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        title:
+          type: string
+          example: "Morning Boss Raid"
+        alarmTime:
+          type: string
+          example: "06:30:00"
+        isEnabled:
+          type: boolean
+        repeatDaysMask:
+          type: integer
+        minigame:
+          $ref: '#/components/schemas/MinigameType'
+        minigameDifficulty:
+          type: integer
+        requiredCompletions:
+          type: integer
+        vibrate:
+          type: boolean
+        volumeLevel:
+          type: integer
+
+    ChallengeResponse:
+      type: object
+      properties:
+        type:
+          $ref: '#/components/schemas/MinigameType'
+        difficulty:
+          type: integer
+        challengePayload:
+          type: string
+          example: "34 + 18"
+        memorySequence:
+          type: array
+          items:
+            type: integer
+          nullable: true
+          example: [2, 5, 8, 3]
+
+    VerificationRequest:
+      type: object
+      required:
+        - alarmId
+        - minigameType
+      properties:
+        alarmId:
+          type: integer
+          format: int64
+          example: 1
+        minigameType:
+          $ref: '#/components/schemas/MinigameType'
+        submittedSolution:
+          type: string
+          nullable: true
+          example: "52"
+        submittedSequence:
+          type: array
+          items:
+            type: integer
+          nullable: true
+          example: [2, 5, 8, 3]
+        secondsTaken:
+          type: integer
+          example: 14
+        snoozeCount:
+          type: integer
+          example: 0
+
+    VerificationResponse:
+      type: object
+      properties:
+        isDismissed:
+          type: boolean
+          example: true
+        currentStreak:
+          type: integer
+          example: 5
+        message:
+          type: string
+          example: "STAGE CLEARED! Alarm dismissed."
+
+    ProblemDetail:
+      type: object
+      description: RFC 7807 standardized problem detail response
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        timestamp:
+          type: string
+          format: date-time
+        invalidFields:
+          type: object
+          additionalProperties:
+            type: string
+
+  responses:
+    NotFoundError:
+      description: Requested entity does not exist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    ValidationError:
+      description: Input validation constraint failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
