@@ -1,13 +1,13 @@
 # Spring Up - Alarm Engine Backend
 
-A high-reliability telemetry and synchronization backend for the **Spring Up** mission-enforced Android alarm system. Built with Spring Boot, this service maintains alarm states, synchronizes mission configurations, and validates post-wake challenge telemetry.
+An Alarm engine designed to help me wake up
 
 ---
 
 ## 🛠 Tech Stack
 
 - **Framework:** Spring Boot 3.x
-- **Language:** Java 17+ / 21
+- **Language:** Java 21
 - **Build Tool:** Maven (`mvnw`)
 - **Persistence:** Spring Data JPA / H2 In-Memory (or PostgreSQL)
 - **Networking:** RESTful APIs, JSON
@@ -18,7 +18,7 @@ A high-reliability telemetry and synchronization backend for the **Spring Up** m
 
 ### Prerequisites
 
-- JDK 17 or higher installed and set to `JAVA_HOME`
+- JDK 21 or higher installed and set to `JAVA_HOME`
 - Maven (optional, wrapper script included)
 
 ### Running Locally
