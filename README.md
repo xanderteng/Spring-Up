@@ -17,7 +17,6 @@ An Alarm engine designed to help me wake up
 ## 🚀 Getting Started
 
 ### Prerequisites
-
 - JDK 21 or higher installed and set to `JAVA_HOME`
 - Maven (optional, wrapper script included)
 
